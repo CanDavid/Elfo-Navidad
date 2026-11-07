@@ -62,7 +62,7 @@ export const LEVEL = {
     ...[6610, 6760, 7110, 7310, 7620, 7810, 8110, 8300, 8560, 8730, 9000, 9170].map((x, i) => ({ id: `t${i}`, x, y: 560 - i * 36 })),
   ] as SparkData[],
   enemies: [
-    { id: 'snow-1', type: 'snowman', x: 2380, y: 680, minX: 2140, maxX: 2480 },
+    { id: 'snow-1', type: 'snowman', x: 1270, y: 680, minX: 1200, maxX: 1370 },
     { id: 'cookie-1', type: 'cookie', x: 4350, y: 690, minX: 4200, maxX: 4560 },
     { id: 'snow-2', type: 'snowman', x: 7180, y: 530, minX: 7040, maxX: 7420 },
   ] as EnemyData[],

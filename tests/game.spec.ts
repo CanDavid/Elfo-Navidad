@@ -58,6 +58,11 @@ test('conserva chispas al reaparecer, no las duplica y activa la ruta completa',
 });
 
 test('los regalos requieren dos impactos, liberan chispas y los enemigos caen derrotados', async ({ page }) => {
+  const snowStart = await page.evaluate(() => window.__NICO_DEBUG__!.enemyX('snow-1'));
+  await page.waitForTimeout(450);
+  const snowMoved = await page.evaluate(() => window.__NICO_DEBUG__!.enemyX('snow-1'));
+  expect(Math.abs(Number(snowMoved) - Number(snowStart))).toBeGreaterThan(5);
+
   await page.evaluate(() => window.__NICO_DEBUG__!.teleport(4160, 690));
   await page.locator('#magic-button').click();
   await page.waitForTimeout(650);

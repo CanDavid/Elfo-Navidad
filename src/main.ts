@@ -21,6 +21,7 @@ declare global {
       castMagic: () => void;
       hitGift: (index: number) => void;
       defeatEnemy: (id: string) => void;
+      enemyX: (id: string) => number | null;
       respawn: () => void;
       finish: () => void;
     };
@@ -376,21 +377,100 @@ class SalonScene extends Phaser.Scene {
   }
 
   private drawWorld() {
-    this.add.rectangle(LEVEL.width / 2, LEVEL.height / 2, LEVEL.width, LEVEL.height, 0x1c4250).setDepth(-20);
-    for (let x = 0; x < LEVEL.width; x += 420) {
-      this.add.circle(x + 120, 110 + (x % 730) / 8, 120, x > 6400 ? 0x315e46 : 0x8f4353, 0.24).setDepth(-18);
-      this.add.circle(x + 250, 250, 170, 0xf4bc65, 0.07).setDepth(-19);
+    this.add.rectangle(LEVEL.width / 2, 360, LEVEL.width, 720, 0x4c3345).setDepth(-30);
+    this.add.rectangle(LEVEL.width / 2, 670, LEVEL.width, 160, 0x754852).setDepth(-29);
+    this.add.rectangle(LEVEL.width / 2, 590, LEVEL.width, 18, 0xe1b778).setDepth(-27);
+    this.add.rectangle(LEVEL.width / 2, 704, LEVEL.width, 20, 0x3d2936).setDepth(-26);
+    for (let x = 60; x < LEVEL.width; x += 170) {
+      this.add.circle(x, 165 + (x % 340 ? 42 : 0), 5, 0xf0c98d, 0.15).setDepth(-28);
+      this.add.rectangle(x, 410, 2, 320, 0xf5d59a, 0.06).setDepth(-28);
     }
-    for (let x = 100; x < LEVEL.width; x += 250) {
-      const glow = this.add.circle(x, 75 + ((x / 250) % 3) * 20, 6, x % 500 ? 0xffd75e : 0xff6477, 0.9).setDepth(-10);
+    this.drawWindow(520, 155);
+    this.drawSofa(1450, 580);
+    this.drawFireplace(2640, 555);
+    this.drawBookshelf(4720, 410);
+    this.drawTree(8200, 690);
+    this.add.ellipse(1700, 718, 2350, 230, 0x2c7772, 0.72).setStrokeStyle(14, 0xe3bc78, 0.65).setDepth(-14);
+    this.add.ellipse(4900, 720, 2500, 210, 0x8c3e54, 0.56).setStrokeStyle(12, 0xd8a868, 0.5).setDepth(-14);
+    this.drawPicture(1120, 210, 280, 190, 0x244f55);
+    this.drawPicture(2050, 200, 220, 160, 0x6c2942);
+    this.drawPicture(6280, 210, 250, 180, 0x275d54);
+    for (let x = 90; x < LEVEL.width; x += 210) {
+      const wireY = 82 + Math.sin(x / 350) * 22;
+      if (x < LEVEL.width - 210) this.add.line(0, 0, x, wireY, x + 210, 82 + Math.sin((x + 210) / 350) * 22, 0x253333, 0.8).setOrigin(0).setDepth(-9);
+      const glow = this.add.circle(x, wireY + 8, 7, x % 420 ? 0xffd75e : 0xff667e, 0.95).setDepth(-8);
       this.twinkles.push(glow);
-      this.tweens.add({ targets: glow, alpha: 0.3, scale: 1.8, yoyo: true, repeat: -1, duration: 700 + (x % 600) });
+      this.tweens.add({ targets: glow, alpha: 0.35, scale: 1.55, yoyo: true, repeat: -1, duration: 750 + (x % 500) });
     }
-    this.add.rectangle(1750, 285, 2400, 360, 0x5a2c42, 0.55).setDepth(-16);
-    this.add.rectangle(4700, 300, 2650, 470, 0x352b4a, 0.72).setDepth(-16);
-    this.add.triangle(8350, 470, 0, 620, 600, 0, 1200, 620, 0x174c38, 0.8).setScale(2.5).setDepth(-15);
     for (let x = 380; x < 3200; x += 540) this.drawGift(x, 690, 130 + x % 90, 100 + x % 60);
     for (let x = 3500; x < 6200; x += 420) this.drawBookStack(x, 700, x % 3);
+  }
+
+  private drawWindow(x: number, y: number) {
+    this.add.rectangle(x, y + 170, 560, 390, 0xe6c28b).setDepth(-22);
+    this.add.rectangle(x, y + 170, 500, 330, 0x173f55).setDepth(-21);
+    this.add.circle(x + 145, y + 75, 48, 0xf8e9bd, 0.85).setDepth(-20);
+    for (let i = 0; i < 22; i += 1) this.add.circle(x - 220 + (i * 83) % 440, y + 35 + (i * 57) % 270, 3 + i % 4, 0xffffff, 0.7).setDepth(-19);
+    this.add.rectangle(x, y + 170, 16, 330, 0xe6c28b).setDepth(-18);
+    this.add.rectangle(x, y + 170, 500, 16, 0xe6c28b).setDepth(-18);
+    this.add.triangle(x - 340, y + 185, 0, 0, 190, -25, 190, 390, 0x87364d, 0.94).setDepth(-17);
+    this.add.triangle(x + 340, y + 185, 0, 0, -190, -25, -190, 390, 0x87364d, 0.94).setDepth(-17);
+  }
+
+  private drawSofa(x: number, y: number) {
+    this.add.rectangle(x, y + 70, 900, 100, 0x3e2533).setDepth(-18);
+    this.add.rectangle(x - 360, y + 130, 42, 120, 0x563527).setDepth(-16);
+    this.add.rectangle(x + 360, y + 130, 42, 120, 0x563527).setDepth(-16);
+    this.add.rectangle(x, y - 85, 820, 330, 0x2f746f).setStrokeStyle(10, 0x173f45).setDepth(-17);
+    this.add.rectangle(x - 245, y - 80, 285, 270, 0x408b82).setStrokeStyle(5, 0x8ac0a8, 0.4).setDepth(-16);
+    this.add.rectangle(x + 65, y - 80, 285, 270, 0x387f78).setStrokeStyle(5, 0x8ac0a8, 0.4).setDepth(-16);
+    this.add.rectangle(x + 320, y - 55, 180, 230, 0x9e4057).setStrokeStyle(6, 0xf0bf78, 0.5).setAngle(-5).setDepth(-15);
+  }
+
+  private drawFireplace(x: number, y: number) {
+    this.add.rectangle(x, y - 160, 720, 45, 0xd0a272).setStrokeStyle(8, 0x694233).setDepth(-18);
+    this.add.rectangle(x, y, 620, 340, 0xa76850).setStrokeStyle(10, 0x684033).setDepth(-19);
+    this.add.rectangle(x, y + 30, 360, 230, 0x241f26).setStrokeStyle(12, 0xe0b17a).setDepth(-17);
+    this.add.ellipse(x, y + 105, 210, 115, 0xe85f3d, 0.9).setDepth(-16);
+    this.add.triangle(x, y + 90, 0, 95, 55, -65, 110, 95, 0xffd35d).setDepth(-15);
+    this.add.rectangle(x - 175, y - 205, 48, 110, 0xc43c52).setDepth(-16);
+    this.add.rectangle(x + 175, y - 205, 48, 110, 0x2e8176).setDepth(-16);
+  }
+
+  private drawBookshelf(x: number, y: number) {
+    this.add.rectangle(x, y, 2880, 650, 0x5b382e).setStrokeStyle(18, 0x2d2428).setDepth(-23);
+    for (let shelf = 0; shelf < 4; shelf += 1) this.add.rectangle(x, 155 + shelf * 155, 2820, 22, 0xc18b5e).setDepth(-20);
+    const colors = [0x9b3d54, 0x347e76, 0xd29a55, 0x5c4f83, 0xb85a43];
+    for (let i = 0; i < 55; i += 1) {
+      const bx = 3350 + (i * 53) % 2720;
+      const row = i % 4;
+      const h = 70 + (i * 17) % 55;
+      this.add.rectangle(bx, 140 + row * 155 - h / 2, 38 + i % 3 * 7, h, colors[i % colors.length], 0.9).setStrokeStyle(2, 0xf3d69a, 0.2).setDepth(-19);
+    }
+    this.add.circle(5270, 235, 68, 0xf0d9a4).setStrokeStyle(10, 0x744938).setDepth(-18);
+    this.add.line(0, 0, 5270, 235, 5270, 190, 0x47313a, 4).setOrigin(0).setDepth(-17);
+    this.add.line(0, 0, 5270, 235, 5310, 250, 0x47313a, 4).setOrigin(0).setDepth(-17);
+  }
+
+  private drawTree(x: number, groundY: number) {
+    this.add.rectangle(x, groundY - 150, 210, 360, 0x633c2a).setStrokeStyle(12, 0x3c2a27).setDepth(-22);
+    this.add.triangle(x, groundY - 490, 0, 620, 650, 0, 1300, 620, 0x14533f, 0.96).setDepth(-21);
+    this.add.triangle(x, groundY - 690, 70, 520, 650, 0, 1230, 520, 0x1c6a4c, 0.96).setDepth(-20);
+    this.add.triangle(x, groundY - 835, 165, 390, 650, 0, 1135, 390, 0x2a7a55, 0.96).setDepth(-19);
+    const ornaments = [0xd94159, 0xf2cb5e, 0x67c6cb, 0xb05a9a];
+    for (let i = 0; i < 20; i += 1) {
+      const ox = x - 430 + (i * 157) % 860;
+      const oy = 185 + (i * 83) % 430;
+      this.add.circle(ox, oy, 16 + i % 3 * 4, ornaments[i % ornaments.length], 0.95).setStrokeStyle(3, 0xffefc2, 0.65).setDepth(-15);
+    }
+    this.add.line(0, 0, x - 460, 360, x + 460, 480, 0xf4d56e, 0.65).setLineWidth(8).setOrigin(0).setDepth(-14);
+    this.add.line(0, 0, x - 360, 250, x + 350, 340, 0xe85b73, 0.55).setLineWidth(7).setOrigin(0).setDepth(-14);
+  }
+
+  private drawPicture(x: number, y: number, width: number, height: number, color: number) {
+    this.add.rectangle(x, y, width, height, 0xd5aa70).setStrokeStyle(8, 0x402d31).setDepth(-22);
+    this.add.rectangle(x, y, width - 30, height - 30, color).setDepth(-21);
+    this.add.circle(x, y - 15, Math.min(width, height) * 0.22, 0xf1d18c, 0.75).setDepth(-20);
   }
 
   private drawGift(x: number, y: number, width: number, height: number) {
@@ -688,18 +768,23 @@ class SalonScene extends Phaser.Scene {
       if (enemy.getData('dying')) return;
       const data = enemy.data.values as EnemyData & { direction: number; nextJumpAt: number; dying: boolean };
       if (data.type === 'snowman') {
-        if (enemy.x <= data.minX) data.direction = 1;
-        if (enemy.x >= data.maxX) data.direction = -1;
-        enemy.setVelocityX(data.direction * 48).setFlipX(data.direction > 0);
-        enemy.angle = Math.sin(time / 180) * 3;
+        if (enemy.x <= data.minX || enemy.body?.blocked.left) data.direction = 1;
+        if (enemy.x >= data.maxX || enemy.body?.blocked.right) data.direction = -1;
+        enemy.setVelocityX(data.direction * 78).setFlipX(data.direction > 0);
+        enemy.angle = Math.sin(time / 120) * 6;
+        enemy.setScale(1, 1 - Math.abs(Math.sin(time / 120)) * 0.06);
       } else {
         if (enemy.body?.blocked.down) {
           enemy.setVelocityX(0);
-          if (time > data.nextJumpAt) {
-            const direction = this.player.x < enemy.x ? -1 : 1;
-            enemy.setVelocity(direction * 112, -300).setFlipX(direction > 0);
+          const remaining = data.nextJumpAt - time;
+          enemy.setScale(1 + (remaining < 380 ? 0.08 : 0), remaining < 380 ? 0.72 : 1);
+          enemy.setTint(remaining < 380 ? 0xffd58a : 0xffffff);
+          if (remaining <= 0) {
+            let direction = this.player.x < enemy.x ? -1 : 1;
+            if (enemy.x <= data.minX) direction = 1;
+            if (enemy.x >= data.maxX) direction = -1;
+            enemy.clearTint().setScale(1).setVelocity(direction * 145, -330).setFlipX(direction > 0);
             data.nextJumpAt = time + 1900;
-            this.tweens.add({ targets: enemy, scaleY: 0.78, yoyo: true, duration: 190 });
           }
         }
       }
@@ -806,6 +891,7 @@ class SalonScene extends Phaser.Scene {
       castMagic: () => this.castMagic(),
       hitGift: (index) => { const gift = this.giftPlatforms[index]; if (gift?.active) this.damageGift(gift); },
       defeatEnemy: (id) => { const enemy = this.enemies.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; if (enemy) this.defeatEnemy(undefined, enemy); },
+      enemyX: (id) => { const enemy = this.enemies.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; return enemy?.x ?? null; },
       respawn: () => this.respawn(),
       finish: () => this.finishLevel(),
     };
