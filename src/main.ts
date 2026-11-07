@@ -277,6 +277,7 @@ class SalonScene extends Phaser.Scene {
   private projectiles!: Phaser.Physics.Arcade.Group;
   private bossProjectiles!: Phaser.Physics.Arcade.Group;
   private boss?: Phaser.Physics.Arcade.Sprite;
+  private bossVisual?: Phaser.GameObjects.Image;
   private bossHealthLabel?: Phaser.GameObjects.Text;
   private movingPlatform!: Phaser.GameObjects.Rectangle;
   private movingBody!: Phaser.Physics.Arcade.StaticBody;
@@ -639,6 +640,8 @@ class SalonScene extends Phaser.Scene {
       this.bossHealth = LEVEL.boss.hits;
       this.boss = this.physics.add.sprite(LEVEL.boss.x, LEVEL.boss.y, 'grouch').setDepth(9).setBounce(0.05).setCollideWorldBounds(true);
       this.boss.body!.setSize(70, 112).setOffset(17, 18);
+      this.boss.setAlpha(0);
+      this.bossVisual = this.add.image(LEVEL.boss.x, LEVEL.boss.y, 'grouch').setDepth(10);
       this.boss.setData({ dying: false, direction: -1 });
       this.bossNextShot = this.time.now + 900;
       this.bossNextJump = this.time.now + 1300;
@@ -789,8 +792,9 @@ class SalonScene extends Phaser.Scene {
     this.bossHealth -= 1;
     this.bossHealthLabel?.setText(`GRUÑÓN  ${'♥ '.repeat(this.bossHealth).trim() || 'DERROTADO'}`);
     audio.play('hit');
-    this.boss.setTint(0xffe078).setVelocityX(this.player.x < this.boss.x ? 190 : -190).setVelocityY(-130);
-    this.tweens.add({ targets: this.boss, scaleX: 1.18, scaleY: 0.82, yoyo: true, duration: 120, onComplete: () => this.boss?.clearTint().setScale(1) });
+    this.boss.setVelocityX(this.player.x < this.boss.x ? 190 : -190).setVelocityY(-130);
+    this.bossVisual?.setTint(0xffe078);
+    if (this.bossVisual) this.tweens.add({ targets: this.bossVisual, scaleX: 1.18, scaleY: 0.82, yoyo: true, duration: 120, onComplete: () => this.bossVisual?.clearTint().setScale(1) });
     if (this.bossHealth > 0) {
       showToast(`¡IMPACTO! QUEDAN ${this.bossHealth} GOLPES`, 1000);
       return;
@@ -800,8 +804,9 @@ class SalonScene extends Phaser.Scene {
     body.checkCollision.none = true;
     body.setAllowGravity(true);
     this.bossProjectiles.clear(true, true);
+    if (this.bossVisual) this.tweens.add({ targets: this.bossVisual, y: this.bossVisual.y + 360, angle: 420, alpha: 0, duration: 850, ease: 'Back.in' });
     showToast('¡EL GRUÑÓN HA SIDO DERROTADO!', 1600);
-    window.setTimeout(() => this.finishLevel(), 1150);
+    this.finishLevel();
   }
 
   private damageGift(target: Phaser.GameObjects.Rectangle) {
@@ -950,11 +955,20 @@ class SalonScene extends Phaser.Scene {
   private updateBoss(time: number) {
     const boss = this.boss;
     const config = LEVEL.boss;
-    if (!boss?.active || !config || boss.getData('dying')) return;
+    if (!boss || !config || this.bossHealth <= 0 || boss.getData('dying')) return;
+    if (!boss.active) boss.setActive(true);
+    const body = boss.body as Phaser.Physics.Arcade.Body;
+    if (!body.enable) body.enable = true;
     if (boss.y > 790 || boss.x < config.minX - 180 || boss.x > config.maxX + 180) {
       boss.setPosition(config.x, config.y).setVelocity(0, 0).setAngularVelocity(0).setAngle(0);
     }
-    boss.setVisible(true).setAlpha(1);
+    boss.setVisible(true).setAlpha(0);
+    this.bossVisual?.setVisible(true).setAlpha(1);
+    this.projectiles.getChildren().forEach((child) => {
+      const bullet = child as Phaser.Physics.Arcade.Sprite;
+      if (bullet.active && Phaser.Math.Distance.Between(bullet.x, bullet.y, boss.x, boss.y) < 82) this.hitBoss(bullet);
+    });
+    if (this.bossHealth <= 0 || boss.getData('dying')) return;
     let direction = Number(boss.getData('direction')) || -1;
     if (boss.x <= config.minX || boss.body?.blocked.left) direction = 1;
     if (boss.x >= config.maxX || boss.body?.blocked.right) direction = -1;
@@ -975,6 +989,7 @@ class SalonScene extends Phaser.Scene {
       const shot = child as Phaser.Physics.Arcade.Sprite;
       if (time - Number(shot.getData('born')) > 2600) shot.destroy();
     });
+    this.bossVisual?.setPosition(boss.x, boss.y).setFlipX(boss.flipX).setAngle(boss.angle);
   }
 
   private setPlayerPose(pose: string) {
@@ -1064,7 +1079,7 @@ class SalonScene extends Phaser.Scene {
   }
 
   private snapshot(): GameSnapshot {
-    return { levelId: LEVEL.id, sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, bossHealth: LEVEL.boss ? this.bossHealth : null, bossProjectiles: this.bossProjectiles.countActive(true), bossX: this.boss?.x ?? null, bossY: this.boss?.y ?? null, bossVisible: this.boss?.visible ?? false, pose: this.currentPose, finished: this.finished };
+    return { levelId: LEVEL.id, sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, bossHealth: LEVEL.boss ? this.bossHealth : null, bossProjectiles: this.bossProjectiles.countActive(true), bossX: this.boss?.x ?? null, bossY: this.boss?.y ?? null, bossVisible: this.bossVisual?.visible ?? false, pose: this.currentPose, finished: this.finished };
   }
 
   private installDebugApi() {
