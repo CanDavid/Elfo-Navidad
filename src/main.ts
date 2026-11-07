@@ -7,12 +7,18 @@ type GameSnapshot = { sparks: number; total: number; score: number; best: number
 
 declare global {
   interface Window {
+    YT?: {
+      Player: new (elementId: string, options: Record<string, unknown>) => YouTubePlayer;
+      PlayerState: { PLAYING: number; ENDED: number };
+    };
+    onYouTubeIframeAPIReady?: () => void;
     __NICO_DEBUG__?: {
       snapshot: () => GameSnapshot;
       teleport: (x: number, y: number) => void;
       collect: (id: string) => void;
       breakIce: () => void;
       activateSwitch: () => void;
+      castMagic: () => void;
       hitGift: (index: number) => void;
       defeatEnemy: (id: string) => void;
       respawn: () => void;
@@ -21,9 +27,14 @@ declare global {
   }
 }
 
+type YouTubePlayer = { playVideo: () => void; stopVideo: () => void; destroy: () => void };
+type YouTubeStateEvent = { data: number };
+
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const shell = $('game-shell');
 const titleScreen = $('title-screen');
+const introScreen = $('intro-screen');
+const introLoading = $('intro-loading');
 const pauseScreen = $('pause-screen');
 const resultScreen = $('result-screen');
 const hud = $('hud');
@@ -49,6 +60,7 @@ if (autoStart) history.replaceState(null, '', `${location.pathname}${location.se
 let started = autoStart;
 let menuPaused = false;
 let orientationPaused = false;
+let introActive = false;
 let toastTimer = 0;
 
 class TinyAudio {
@@ -99,6 +111,9 @@ class TinyAudio {
 
 const audio = new TinyAudio();
 const held: HeldInput = { left: false, right: false, jump: false, magic: false };
+const youtubeVideoId = 'q5j9RXUoDP0';
+let youtubePlayer: YouTubePlayer | undefined;
+let youtubePlayerPromise: Promise<YouTubePlayer | undefined> | undefined;
 
 function showToast(message: string, duration = 2200) {
   toast.textContent = message;
@@ -172,6 +187,62 @@ function reloadRun() {
   clearHeldInputs();
   history.replaceState(null, '', `${location.pathname}${location.search}#replay`);
   location.reload();
+}
+
+function startLevel() {
+  if (!introActive) return;
+  introActive = false;
+  youtubePlayer?.stopVideo();
+  introScreen.classList.add('hidden');
+  started = true;
+  hud.classList.remove('hidden');
+  touchControls.classList.remove('hidden');
+  activeScene?.scene.resume();
+  showToast(LEVEL.name, 1800);
+  checkOrientation();
+}
+
+function prepareYouTubePlayer() {
+  if (youtubePlayer) return Promise.resolve(youtubePlayer);
+  if (youtubePlayerPromise) return youtubePlayerPromise;
+  youtubePlayerPromise = new Promise((resolve) => {
+    const createPlayer = () => {
+      if (!window.YT?.Player) { resolve(undefined); return; }
+      youtubePlayer = new window.YT.Player('youtube-player', {
+        videoId: youtubeVideoId,
+        width: '100%',
+        height: '100%',
+        playerVars: { autoplay: 0, controls: 1, playsinline: 1, rel: 0, fs: 0 },
+        events: {
+          onReady: () => resolve(youtubePlayer),
+          onStateChange: (event: YouTubeStateEvent) => {
+            if (event.data === window.YT?.PlayerState.PLAYING) introLoading.classList.add('hidden');
+            if (event.data === window.YT?.PlayerState.ENDED) startLevel();
+          },
+          onError: () => { introLoading.textContent = 'NO SE PUDO CARGAR · PULSA SALTAR'; },
+        },
+      });
+    };
+    if (window.YT?.Player) { createPlayer(); return; }
+    window.onYouTubeIframeAPIReady = createPlayer;
+    const script = document.createElement('script');
+    script.src = 'https://www.youtube.com/iframe_api';
+    script.async = true;
+    script.onerror = () => { introLoading.textContent = 'NO SE PUDO CARGAR · PULSA SALTAR'; resolve(undefined); };
+    document.head.appendChild(script);
+  });
+  return youtubePlayerPromise;
+}
+
+function playIntro() {
+  introActive = true;
+  titleScreen.classList.add('hidden');
+  introScreen.classList.remove('hidden');
+  introLoading.classList.remove('hidden');
+  void prepareYouTubePlayer().then((player) => {
+    if (!introActive) return;
+    if (player) player.playVideo();
+  });
 }
 
 window.addEventListener('resize', checkOrientation);
@@ -473,6 +544,7 @@ class SalonScene extends Phaser.Scene {
     if (this.finished || !started || this.scene.isPaused() || this.time.now - this.lastMagicAt < 330) return;
     this.lastMagicAt = this.time.now;
     this.castingUntil = this.time.now + 480;
+    this.setPlayerPose('nico-magic');
     const star = this.projectiles.create(this.player.x + this.facing * 34, this.player.y - 5, 'magic') as Phaser.Physics.Arcade.Sprite;
     star.setVelocityX(this.facing * 590).setAngularVelocity(this.facing * 420).setDepth(9).setData('born', this.time.now);
     audio.play('magic');
@@ -731,6 +803,7 @@ class SalonScene extends Phaser.Scene {
       collect: (id) => { const spark = this.sparks.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; if (spark) this.collectSpark(spark); },
       breakIce: () => this.breakIce(),
       activateSwitch: () => this.activateSwitch(),
+      castMagic: () => this.castMagic(),
       hitGift: (index) => { const gift = this.giftPlatforms[index]; if (gift?.active) this.damageGift(gift); },
       defeatEnemy: (id) => { const enemy = this.enemies.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; if (enemy) this.defeatEnemy(undefined, enemy); },
       respawn: () => this.respawn(),
@@ -752,15 +825,12 @@ const game = new Phaser.Game({
 
 $('play-button').addEventListener('click', () => {
   audio.unlock();
-  started = true;
-  titleScreen.classList.add('hidden');
   resultScreen.classList.add('hidden');
-  hud.classList.remove('hidden');
-  touchControls.classList.remove('hidden');
-  activeScene?.scene.resume();
-  showToast(LEVEL.name, 1800);
-  checkOrientation();
+  playIntro();
 });
+
+window.addEventListener('nico-intro-ended', startLevel);
+$('skip-intro-button').addEventListener('click', startLevel);
 
 $('pause-button').addEventListener('click', () => pauseGame(true));
 $('continue-button').addEventListener('click', resumeGame);

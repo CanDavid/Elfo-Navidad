@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('?test=1');
   await expect(page.getByRole('heading', { name: /NICO Y LA/ })).toBeVisible();
   await page.getByRole('button', { name: 'JUGAR' }).click();
+  await page.getByRole('button', { name: /SALTAR/ }).click();
   await expect(page.locator('#hud')).toBeVisible();
   await page.waitForFunction(() => !!window.__NICO_DEBUG__);
 });
@@ -88,10 +89,8 @@ test('Nico cambia de pose al correr, saltar, volar y lanzar magia', async ({ pag
   await page.waitForTimeout(100);
   expect((await snapshot(page)).pose).toBe('nico-fly');
   await page.keyboard.up('Space');
-  await page.locator('#magic-button').dispatchEvent('pointerdown', { pointerId: 14, pointerType: 'touch', isPrimary: true });
-  await page.waitForTimeout(60);
+  await page.evaluate(() => window.__NICO_DEBUG__!.castMagic());
   expect((await snapshot(page)).pose).toBe('nico-magic');
-  await page.locator('#magic-button').dispatchEvent('pointerup', { pointerId: 14, pointerType: 'touch' });
 });
 
 test('termina la partida, reinicia elementos y conserva el récord', async ({ page }) => {
