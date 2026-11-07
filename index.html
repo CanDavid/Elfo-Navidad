@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+    <meta name="theme-color" content="#173a38" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="./icon.svg" />
+    <title>NICO Y LA MAGIA PERDIDA</title>
+  </head>
+  <body>
+    <main id="game-shell" aria-label="NICO Y LA MAGIA PERDIDA">
+      <div id="game"></div>
+      <section id="hud" class="hidden" aria-live="polite">
+        <div class="hud-stat"><span>CHISPAS</span><strong id="spark-count">0/0</strong></div>
+        <div class="hud-stat"><span>PUNTOS</span><strong id="score-count">000000</strong></div>
+        <div class="flight-wrap"><span>VUELO</span><div class="flight-track"><div id="flight-fill"></div></div></div>
+        <button id="pause-button" class="round-button" aria-label="PAUSA">II</button>
+      </section>
+      <section id="touch-controls" class="hidden" aria-label="CONTROLES TÁCTILES">
+        <div class="move-controls">
+          <button id="left-button" class="control-button direction" aria-label="IZQUIERDA">◀</button>
+          <button id="right-button" class="control-button direction" aria-label="DERECHA">▶</button>
+        </div>
+        <div class="action-controls">
+          <button id="jump-button" class="control-button action jump">SALTAR</button>
+          <button id="magic-button" class="control-button action magic">MAGIA</button>
+        </div>
+      </section>
+      <section id="title-screen" class="screen-card">
+        <p class="eyebrow">UN CUENTO NAVIDEÑO</p>
+        <h1>NICO Y LA<br /><span>MAGIA PERDIDA</span></h1>
+        <div class="hero-elf" aria-hidden="true"><i></i><b>★</b></div>
+        <p>EL VIENTO HA APAGADO LA ESTRELLA.<br />¡AYUDA A NICO A RECUPERAR SUS CHISPAS!</p>
+        <button id="play-button" class="primary-button">JUGAR</button>
+      </section>
+      <section id="pause-screen" class="screen-card hidden">
+        <p class="eyebrow">EL SALÓN DE NAVIDAD</p>
+        <h2>PAUSA</h2>
+        <button id="continue-button" class="primary-button">CONTINUAR</button>
+        <button id="restart-button" class="secondary-button">REINICIAR</button>
+        <button id="sound-button" class="secondary-button">SONIDO: SÍ</button>
+      </section>
+      <section id="result-screen" class="screen-card hidden">
+        <p class="eyebrow">MISIÓN CUMPLIDA</p>
+        <h2>¡HAS ENCENDIDO<br />LA ESTRELLA!</h2>
+        <dl>
+          <div><dt>CHISPAS RECOGIDAS</dt><dd id="result-sparks">0/0</dd></div>
+          <div><dt>PUNTOS</dt><dd id="result-score">0</dd></div>
+          <div><dt>RÉCORD</dt><dd id="result-best">0</dd></div>
+        </dl>
+        <button id="replay-button" class="primary-button">VOLVER A JUGAR</button>
+      </section>
+      <div id="rotate-message" class="hidden"><div>↻</div><strong>GIRA EL DISPOSITIVO<br />PARA JUGAR</strong></div>
+      <div id="toast" class="hidden"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
