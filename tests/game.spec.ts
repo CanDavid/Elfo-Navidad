@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-type Snapshot = { sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; finished: boolean };
+type Snapshot = { sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; pose: string; finished: boolean };
 
 const snapshot = (page: import('@playwright/test').Page) => page.evaluate(() => window.__NICO_DEBUG__!.snapshot()) as Promise<Snapshot>;
 
@@ -54,6 +54,44 @@ test('conserva chispas al reaparecer, no las duplica y activa la ruta completa',
   expect(route.iceBroken).toBe(true);
   expect(route.switchOn).toBe(true);
   expect(route.secretFound).toBe(true);
+});
+
+test('los regalos requieren dos impactos, liberan chispas y los enemigos caen derrotados', async ({ page }) => {
+  await page.evaluate(() => window.__NICO_DEBUG__!.teleport(4160, 690));
+  await page.locator('#magic-button').click();
+  await page.waitForTimeout(650);
+  expect((await snapshot(page)).enemiesDefeated).toBe(1);
+
+  await page.evaluate(() => window.__NICO_DEBUG__!.teleport(900, 690));
+  await page.locator('#magic-button').click();
+  await page.waitForTimeout(430);
+  expect((await snapshot(page)).giftsBroken).toBe(0);
+  await page.locator('#magic-button').click();
+  await page.waitForTimeout(430);
+  expect((await snapshot(page)).giftsBroken).toBe(1);
+  await page.evaluate(() => window.__NICO_DEBUG__!.collect('g3'));
+  expect((await snapshot(page)).sparks).toBe(1);
+});
+
+test('Nico cambia de pose al correr, saltar, volar y lanzar magia', async ({ page }) => {
+  await page.waitForFunction(() => window.__NICO_DEBUG__?.snapshot().pose === 'nico-idle');
+  expect((await snapshot(page)).pose).toBe('nico-idle');
+  await page.keyboard.down('ArrowRight');
+  await page.waitForTimeout(180);
+  expect((await snapshot(page)).pose).toMatch(/nico-run[12]/);
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(80);
+  expect((await snapshot(page)).pose).toBe('nico-jump');
+  await page.keyboard.up('ArrowRight');
+
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(100);
+  expect((await snapshot(page)).pose).toBe('nico-fly');
+  await page.keyboard.up('Space');
+  await page.locator('#magic-button').dispatchEvent('pointerdown', { pointerId: 14, pointerType: 'touch', isPrimary: true });
+  await page.waitForTimeout(60);
+  expect((await snapshot(page)).pose).toBe('nico-magic');
+  await page.locator('#magic-button').dispatchEvent('pointerup', { pointerId: 14, pointerType: 'touch' });
 });
 
 test('termina la partida, reinicia elementos y conserva el récord', async ({ page }) => {

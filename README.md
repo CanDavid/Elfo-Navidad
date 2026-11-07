@@ -23,6 +23,7 @@ npm run preview
 - **MÓVIL/TABLETA:** botones ◀/▶, **SALTAR** y **MAGIA**. Se pueden mantener varios a la vez.
 - **TECLADO:** flechas o A/D para correr, espacio para saltar y volar, X para lanzar magia y Escape para pausar.
 - Mantén SALTAR para ganar altura. Pulsa SALTAR otra vez en el aire y mantenlo para volar hasta dos segundos.
+- La magia derrota enemigos y abre los regalos rojos con dos impactos para liberar las chispas de su interior.
 
 ## AÑADIR NIVELES
 

@@ -3,7 +3,7 @@ import { LEVEL, type EnemyData, type PlatformData } from './level';
 import './style.css';
 
 type HeldInput = { left: boolean; right: boolean; jump: boolean; magic: boolean };
-type GameSnapshot = { sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; finished: boolean };
+type GameSnapshot = { sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; pose: string; finished: boolean };
 
 declare global {
   interface Window {
@@ -13,6 +13,8 @@ declare global {
       collect: (id: string) => void;
       breakIce: () => void;
       activateSwitch: () => void;
+      hitGift: (index: number) => void;
+      defeatEnemy: (id: string) => void;
       respawn: () => void;
       finish: () => void;
     };
@@ -187,6 +189,7 @@ class SalonScene extends Phaser.Scene {
   private movingPlatform!: Phaser.GameObjects.Rectangle;
   private movingBody!: Phaser.Physics.Arcade.StaticBody;
   private iceBlocks: Phaser.GameObjects.Rectangle[] = [];
+  private giftPlatforms: Phaser.GameObjects.Rectangle[] = [];
   private goal!: Phaser.Physics.Arcade.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -195,6 +198,8 @@ class SalonScene extends Phaser.Scene {
   private switchOn = false;
   private iceBroken = false;
   private secretFound = false;
+  private giftsBroken = 0;
+  private enemiesDefeated = 0;
   private finished = false;
   private facing = 1;
   private jumpPressedAt = -9999;
@@ -203,6 +208,8 @@ class SalonScene extends Phaser.Scene {
   private flying = false;
   private usedAirJump = false;
   private lastMagicAt = -9999;
+  private castingUntil = -9999;
+  private currentPose = '';
   private invulnerableUntil = 0;
   private tutorialIndex = 0;
   private respawnPoint: { x: number; y: number } = { ...LEVEL.spawn };
@@ -237,17 +244,43 @@ class SalonScene extends Phaser.Scene {
       if (this.textures.exists(key)) return;
       const g = this.add.graphics(); draw(g); g.generateTexture(key, width, height); g.destroy();
     };
-    make('nico', 54, 82, (g) => {
-      g.fillStyle(0x7c2035).fillRoundedRect(13, 41, 28, 35, 9);
-      g.fillStyle(0xe04455).fillTriangle(8, 31, 44, 1, 47, 34);
-      g.fillStyle(0xf5c85a).fillCircle(44, 7, 6);
-      g.fillStyle(0xffdcc2).fillCircle(27, 32, 18);
-      g.fillStyle(0xff9c9e).fillCircle(14, 37, 5).fillCircle(40, 37, 5);
-      g.fillStyle(0x352638).fillCircle(21, 29, 2).fillCircle(33, 29, 2);
-      g.lineStyle(2, 0x9a3448).beginPath().arc(27, 35, 7, 0.3, 2.7).strokePath();
-      g.fillStyle(0xfff5dc).fillTriangle(11, 45, 27, 60, 43, 45);
-      g.lineStyle(7, 0x7c2035).lineBetween(18, 70, 12, 81).lineBetween(36, 70, 42, 81);
-    });
+    type ElfPose = 'idle' | 'run1' | 'run2' | 'jump' | 'fall' | 'fly' | 'magic' | 'celebrate';
+    const drawElf = (g: Phaser.GameObjects.Graphics, pose: ElfPose) => {
+      const poses = {
+        idle: { la:[24,62,19,88], ra:[48,62,53,88], ll:[30,84,27,103], rl:[42,84,45,103] },
+        run1: { la:[24,62,14,77], ra:[48,62,60,72], ll:[31,84,18,99], rl:[42,84,55,96] },
+        run2: { la:[24,62,12,72], ra:[48,62,57,79], ll:[31,84,52,99], rl:[42,84,24,96] },
+        jump: { la:[24,62,12,43], ra:[48,62,61,42], ll:[31,84,22,94], rl:[42,84,52,93] },
+        fall: { la:[24,62,7,66], ra:[48,62,65,66], ll:[31,84,30,103], rl:[42,84,43,103] },
+        fly: { la:[24,62,9,51], ra:[48,62,66,49], ll:[31,84,20,95], rl:[42,84,55,95] },
+        magic: { la:[24,62,17,84], ra:[48,62,69,58], ll:[31,84,27,103], rl:[42,84,45,103] },
+        celebrate: { la:[24,62,11,38], ra:[48,62,61,37], ll:[31,84,22,98], rl:[42,84,51,98] },
+      }[pose];
+      const limb = (points: number[]) => {
+        g.lineStyle(7, 0xb9253c, 1).lineBetween(points[0], points[1], points[2], points[3]);
+        g.fillStyle(0xffffff).fillCircle(points[2], points[3], 4);
+      };
+      limb(poses.la); limb(poses.ra);
+      g.lineStyle(7, 0xb9253c, 1).lineBetween(poses.ll[0], poses.ll[1], poses.ll[2], poses.ll[3]).lineBetween(poses.rl[0], poses.rl[1], poses.rl[2], poses.rl[3]);
+      g.fillStyle(0x2b2330).fillEllipse(poses.ll[2] - 1, Math.min(102, poses.ll[3]), 14, 6).fillEllipse(poses.rl[2] + 1, Math.min(102, poses.rl[3]), 14, 6);
+      g.fillStyle(0xc72b43).fillRoundedRect(23, 55, 26, 35, 7);
+      g.fillStyle(0xf9f2df).fillTriangle(20, 56, 36, 69, 52, 56).fillCircle(36, 57, 4);
+      g.fillStyle(0xf1b99e).fillEllipse(36, 38, 35, 37);
+      g.fillStyle(0xe7a786).fillEllipse(18, 39, 7, 11).fillEllipse(54, 39, 7, 11);
+      g.fillStyle(0x7b3d2e).fillRoundedRect(21, 22, 30, 9, 4);
+      g.fillStyle(0xd42e45).fillTriangle(13, 27, 52, 4, 55, 30);
+      g.fillStyle(0xf3c94f).fillCircle(52, 7, 5);
+      g.fillStyle(0xf8dfd0).fillEllipse(26, 43, 8, 6).fillEllipse(47, 43, 8, 6);
+      g.fillStyle(0xe88d95).fillCircle(21, 47, 5).fillCircle(51, 47, 5);
+      g.fillStyle(0xffffff).fillEllipse(29, 37, 8, 6).fillEllipse(43, 37, 8, 6);
+      g.fillStyle(0x5b82a0).fillCircle(30, 37, 3).fillCircle(42, 37, 3);
+      g.fillStyle(0x25212b).fillCircle(30, 37, 1.5).fillCircle(42, 37, 1.5);
+      g.lineStyle(2, 0x8b3441, 1).beginPath().arc(36, 45, 9, 0.35, 2.8).strokePath();
+      if (pose === 'magic') {
+        g.fillStyle(0xb9f7ff, 0.9).fillPoints([{x:68,y:42},{x:71,y:51},{x:80,y:54},{x:71,y:57},{x:68,y:66},{x:65,y:57},{x:56,y:54},{x:65,y:51}], true);
+      }
+    };
+    (['idle','run1','run2','jump','fall','fly','magic','celebrate'] as ElfPose[]).forEach((pose) => make(`nico-${pose}`, 80, 108, (g) => drawElf(g, pose)));
     make('spark', 34, 34, (g) => {
       g.fillStyle(0xffdf62).fillPoints([{x:17,y:0},{x:21,y:11},{x:34,y:12},{x:24,y:20},{x:28,y:33},{x:17,y:25},{x:6,y:33},{x:10,y:20},{x:0,y:12},{x:13,y:11}], true);
       g.lineStyle(2, 0xffffff, 0.8).strokeCircle(17, 16, 12);
@@ -305,13 +338,15 @@ class SalonScene extends Phaser.Scene {
 
   private createPlatforms() {
     this.platforms = this.physics.add.staticGroup();
-    LEVEL.platforms.forEach((data) => {
+    LEVEL.platforms.forEach((data, index) => {
       const platform = this.add.rectangle(data.x + data.width / 2, data.y + data.height / 2, data.width, data.height, this.platformColor(data.kind))
         .setStrokeStyle(data.kind === 'branch' ? 7 : 4, data.kind === 'branch' ? 0x9bc96f : 0xffd89a, 0.65);
       this.physics.add.existing(platform, true);
       this.platforms.add(platform);
       if (data.kind === 'gift') {
-        this.add.rectangle(data.x + data.width / 2, data.y + data.height / 2, 16, data.height, 0xffd15d).setDepth(platform.depth + 1);
+        const ribbon = this.add.rectangle(data.x + data.width / 2, data.y + data.height / 2, 16, data.height, 0xffd15d).setDepth(platform.depth + 1);
+        platform.setData({ gift: true, hits: 2, giftIndex: index, ribbon });
+        this.giftPlatforms.push(platform);
       }
     });
     const moving = LEVEL.movingPlatform;
@@ -326,14 +361,19 @@ class SalonScene extends Phaser.Scene {
     this.sparks = this.physics.add.group({ allowGravity: false, immovable: true });
     LEVEL.sparks.forEach((data, index) => {
       const spark = this.sparks.create(data.x, data.y, 'spark') as Phaser.Physics.Arcade.Sprite;
-      spark.setData({ id: data.id, secret: !!data.secret });
+      const giftIndex = LEVEL.platforms.findIndex((platform) => platform.kind === 'gift' && data.x > platform.x && data.x < platform.x + platform.width && data.y > platform.y && data.y < platform.y + platform.height);
+      spark.setData({ id: data.id, secret: !!data.secret, giftIndex });
+      if (giftIndex >= 0) {
+        spark.setVisible(false);
+        (spark.body as Phaser.Physics.Arcade.Body).enable = false;
+      }
       spark.setDepth(5);
       this.tweens.add({ targets: spark, y: data.y - 10, angle: 12, yoyo: true, repeat: -1, duration: 700 + (index % 4) * 120 });
     });
     this.enemies = this.physics.add.group({ collideWorldBounds: true });
     LEVEL.enemies.forEach((data) => {
       const enemy = this.enemies.create(data.x, data.y, data.type) as Phaser.Physics.Arcade.Sprite;
-      enemy.setData({ ...data, direction: -1, stunnedUntil: 0, nextJumpAt: this.time.now + 1600 });
+      enemy.setData({ ...data, direction: -1, dying: false, nextJumpAt: this.time.now + 1600 });
       enemy.setBounce(0.05).setDepth(5);
       enemy.body!.setSize(data.type === 'cookie' ? 44 : 46, data.type === 'cookie' ? 55 : 68);
     });
@@ -361,9 +401,9 @@ class SalonScene extends Phaser.Scene {
   }
 
   private createPlayer() {
-    this.player = this.physics.add.sprite(LEVEL.spawn.x, LEVEL.spawn.y, 'nico').setDepth(10);
+    this.player = this.physics.add.sprite(LEVEL.spawn.x, LEVEL.spawn.y, 'nico-idle').setDepth(10);
     this.player.setCollideWorldBounds(false).setMaxVelocity(330, 760).setDragX(1100);
-    this.player.body!.setSize(36, 70).setOffset(9, 10);
+    this.player.body!.setSize(34, 78).setOffset(23, 28);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08, -220, 55);
     this.cameras.main.setDeadzone(170, 180);
   }
@@ -386,10 +426,11 @@ class SalonScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.platforms);
     this.physics.add.overlap(this.player, this.sparks, (_player, spark) => this.collectSpark(spark as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.player, this.enemies, (_player, enemy) => this.hitPlayer(enemy as Phaser.Physics.Arcade.Sprite));
-    this.physics.add.overlap(this.projectiles, this.enemies, (bullet, enemy) => this.stunEnemy(bullet as Phaser.Physics.Arcade.Sprite, enemy as Phaser.Physics.Arcade.Sprite));
+    this.physics.add.overlap(this.projectiles, this.enemies, (bullet, enemy) => this.defeatEnemy(bullet as Phaser.Physics.Arcade.Sprite, enemy as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.projectiles, this.platforms, (bullet, object) => {
       const target = object as unknown as Phaser.GameObjects.Rectangle;
-      if (target.getData('ice')) this.breakIce(target);
+      if (target.getData('gift')) this.damageGift(target);
+      else if (target.getData('ice')) this.breakIce(target);
       (bullet as Phaser.Physics.Arcade.Sprite).destroy();
     });
     this.physics.add.overlap(this.player, this.goal, () => this.finishLevel());
@@ -431,6 +472,7 @@ class SalonScene extends Phaser.Scene {
   castMagic() {
     if (this.finished || !started || this.scene.isPaused() || this.time.now - this.lastMagicAt < 330) return;
     this.lastMagicAt = this.time.now;
+    this.castingUntil = this.time.now + 480;
     const star = this.projectiles.create(this.player.x + this.facing * 34, this.player.y - 5, 'magic') as Phaser.Physics.Arcade.Sprite;
     star.setVelocityX(this.facing * 590).setAngularVelocity(this.facing * 420).setDepth(9).setData('born', this.time.now);
     audio.play('magic');
@@ -451,15 +493,52 @@ class SalonScene extends Phaser.Scene {
   }
 
   private hitPlayer(enemy: Phaser.Physics.Arcade.Sprite) {
-    if (this.time.now < this.invulnerableUntil || enemy.getData('stunnedUntil') > this.time.now) return;
+    if (this.time.now < this.invulnerableUntil || enemy.getData('dying')) return;
     this.respawn('¡CUIDADO!');
   }
 
-  private stunEnemy(bullet: Phaser.Physics.Arcade.Sprite, enemy: Phaser.Physics.Arcade.Sprite) {
-    bullet.destroy();
-    enemy.setData('stunnedUntil', this.time.now + 2500).setTint(0xbceeff).setVelocity(0, -80);
-    this.time.delayedCall(2500, () => enemy?.active && enemy.clearTint());
+  private defeatEnemy(bullet: Phaser.Physics.Arcade.Sprite | undefined, enemy: Phaser.Physics.Arcade.Sprite) {
+    bullet?.destroy();
+    if (!enemy.active || enemy.getData('dying')) return;
+    enemy.setData('dying', true).setCollideWorldBounds(false).setTint(0xffe37a).setVelocity(enemy.x < this.player.x ? -150 : 150, -370).setAngularVelocity(enemy.x < this.player.x ? -380 : 380);
+    const body = enemy.body as Phaser.Physics.Arcade.Body;
+    body.checkCollision.none = true;
+    body.setAllowGravity(true);
+    this.enemiesDefeated += 1;
+    this.tweens.add({ targets: enemy, alpha: 0.2, delay: 650, duration: 700, onComplete: () => enemy.destroy() });
     audio.play('hit');
+    showToast('¡ENEMIGO DERROTADO!', 800);
+  }
+
+  private damageGift(target: Phaser.GameObjects.Rectangle) {
+    if (!target.active) return;
+    const hits = Number(target.getData('hits')) - 1;
+    target.setData('hits', hits);
+    audio.play('hit');
+    this.tweens.add({ targets: target, x: target.x + 7, angle: 3, yoyo: true, repeat: 2, duration: 45 });
+    if (hits > 0) {
+      target.setFillStyle(0xe05965).setStrokeStyle(6, 0xffffff, 0.8);
+      showToast('¡OTRO GOLPE DE MAGIA!', 700);
+      return;
+    }
+    this.giftsBroken += 1;
+    const giftIndex = Number(target.getData('giftIndex'));
+    const ribbon = target.getData('ribbon') as Phaser.GameObjects.Rectangle | undefined;
+    ribbon?.destroy();
+    for (let i = 0; i < 8; i += 1) {
+      const piece = this.add.rectangle(target.x + Phaser.Math.Between(-30, 30), target.y, 16, 12, i % 2 ? 0xffd15d : 0xc93d53).setDepth(12).setAngle(i * 37);
+      this.tweens.add({ targets: piece, x: piece.x + Phaser.Math.Between(-90, 90), y: piece.y + Phaser.Math.Between(-90, 60), angle: piece.angle + 180, alpha: 0, duration: 520, onComplete: () => piece.destroy() });
+    }
+    this.sparks.getChildren().forEach((child) => {
+      const spark = child as Phaser.Physics.Arcade.Sprite;
+      if (spark.getData('giftIndex') === giftIndex) {
+        spark.setVisible(true).setScale(0.2);
+        (spark.body as Phaser.Physics.Arcade.Body).enable = true;
+        this.tweens.add({ targets: spark, scale: 1, duration: 300, ease: 'Back.out' });
+      }
+    });
+    target.destroy();
+    showToast('¡REGALO ABIERTO! ¡RECOGE LAS CHISPAS!', 1300);
   }
 
   private breakIce(target?: Phaser.GameObjects.Rectangle) {
@@ -506,6 +585,7 @@ class SalonScene extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.player.setVelocity(0, 0).body!.enable = false;
+    this.setPlayerPose('nico-celebrate');
     this.goal.setTint(0xffffff);
     this.cameras.main.flash(700, 255, 226, 109);
     this.twinkles.forEach((light) => light.setFillStyle(0xffe36e, 1));
@@ -533,23 +613,31 @@ class SalonScene extends Phaser.Scene {
   private updateEnemies(time: number) {
     this.enemies.getChildren().forEach((child) => {
       const enemy = child as Phaser.Physics.Arcade.Sprite;
-      if (enemy.getData('stunnedUntil') > time) { enemy.setVelocityX(0); return; }
-      const data = enemy.data.values as EnemyData & { direction: number; nextJumpAt: number };
+      if (enemy.getData('dying')) return;
+      const data = enemy.data.values as EnemyData & { direction: number; nextJumpAt: number; dying: boolean };
       if (data.type === 'snowman') {
         if (enemy.x <= data.minX) data.direction = 1;
         if (enemy.x >= data.maxX) data.direction = -1;
         enemy.setVelocityX(data.direction * 48).setFlipX(data.direction > 0);
         enemy.angle = Math.sin(time / 180) * 3;
       } else {
-        enemy.setVelocityX(0);
-        if (time > data.nextJumpAt && enemy.body?.blocked.down) {
-          const direction = this.player.x < enemy.x ? -1 : 1;
-          enemy.setVelocity(direction * 92, -300).setFlipX(direction > 0);
-          data.nextJumpAt = time + 1900;
-          this.tweens.add({ targets: enemy, scaleY: 0.78, yoyo: true, duration: 190 });
+        if (enemy.body?.blocked.down) {
+          enemy.setVelocityX(0);
+          if (time > data.nextJumpAt) {
+            const direction = this.player.x < enemy.x ? -1 : 1;
+            enemy.setVelocity(direction * 112, -300).setFlipX(direction > 0);
+            data.nextJumpAt = time + 1900;
+            this.tweens.add({ targets: enemy, scaleY: 0.78, yoyo: true, duration: 190 });
+          }
         }
       }
     });
+  }
+
+  private setPlayerPose(pose: string) {
+    if (this.currentPose === pose) return;
+    this.currentPose = pose;
+    this.player.setTexture(pose);
   }
 
   private updateTutorials() {
@@ -578,9 +666,10 @@ class SalonScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (!started || this.finished) return;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const grounded = body.blocked.down || body.touching.down;
+    const groundedContact = body.blocked.down || body.touching.down || body.wasTouching.down;
+    if (groundedContact) this.leftGroundAt = time;
+    const grounded = groundedContact || (time - this.leftGroundAt < 90 && Math.abs(body.velocity.y) < 80);
     if (grounded) {
-      this.leftGroundAt = time;
       this.flightRemaining = 2000;
       this.usedAirJump = false;
       this.flying = false;
@@ -606,6 +695,11 @@ class SalonScene extends Phaser.Scene {
     } else {
       body.setAllowGravity(true);
     }
+    if (time < this.castingUntil) this.setPlayerPose('nico-magic');
+    else if (this.flying) this.setPlayerPose('nico-fly');
+    else if (!grounded) this.setPlayerPose(body.velocity.y < 0 ? 'nico-jump' : 'nico-fall');
+    else if (Math.abs(body.velocity.x) > 28) this.setPlayerPose(Math.floor(time / 120) % 2 ? 'nico-run1' : 'nico-run2');
+    else this.setPlayerPose('nico-idle');
     this.player.angle = this.flying ? Math.sin(time / 100) * 8 : Phaser.Math.Linear(this.player.angle, grounded && Math.abs(body.velocity.x) > 20 ? Math.sin(time / 75) * 4 : 0, 0.18);
     this.player.setScale(grounded && Math.abs(body.velocity.x) < 15 ? 1 + Math.sin(time / 400) * 0.025 : 1);
     this.projectiles.getChildren().forEach((child) => {
@@ -626,7 +720,7 @@ class SalonScene extends Phaser.Scene {
   }
 
   private snapshot(): GameSnapshot {
-    return { sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, finished: this.finished };
+    return { sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, pose: this.currentPose, finished: this.finished };
   }
 
   private installDebugApi() {
@@ -637,6 +731,8 @@ class SalonScene extends Phaser.Scene {
       collect: (id) => { const spark = this.sparks.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; if (spark) this.collectSpark(spark); },
       breakIce: () => this.breakIce(),
       activateSwitch: () => this.activateSwitch(),
+      hitGift: (index) => { const gift = this.giftPlatforms[index]; if (gift?.active) this.damageGift(gift); },
+      defeatEnemy: (id) => { const enemy = this.enemies.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; if (enemy) this.defeatEnemy(undefined, enemy); },
       respawn: () => this.respawn(),
       finish: () => this.finishLevel(),
     };

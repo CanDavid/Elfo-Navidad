@@ -68,6 +68,7 @@ export const LEVEL = {
   ] as EnemyData[],
   tutorials: [
     { x: 500, text: 'USA ◀ ▶ PARA CORRER' },
+    { x: 900, text: 'ROMPE LOS REGALOS ROJOS CON DOS GOLPES DE MAGIA' },
     { x: 1080, text: 'MANTÉN PARA SALTAR MÁS ALTO' },
     { x: 1740, text: 'PULSA OTRA VEZ EN EL AIRE PARA VOLAR' },
     { x: 3620, text: 'LA MAGIA ROMPE EL HIELO' },
