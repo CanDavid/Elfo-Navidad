@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { LEVEL, type EnemyData, type PlatformData } from './level';
+import { LEVEL, LEVELS, selectLevel, type EnemyData, type PlatformData } from './level';
 import './style.css';
 
 type HeldInput = { left: boolean; right: boolean; jump: boolean; magic: boolean };
-type GameSnapshot = { sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; pose: string; finished: boolean };
+type GameSnapshot = { levelId: string; sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; bossHealth: number | null; bossProjectiles: number; pose: string; finished: boolean };
 
 declare global {
   interface Window {
@@ -22,6 +22,7 @@ declare global {
       hitGift: (index: number) => void;
       defeatEnemy: (id: string) => void;
       enemyX: (id: string) => number | null;
+      hitBoss: () => void;
       respawn: () => void;
       finish: () => void;
     };
@@ -38,6 +39,7 @@ const introScreen = $('intro-screen');
 const introLoading = $('intro-loading');
 const pauseScreen = $('pause-screen');
 const resultScreen = $('result-screen');
+const storyScreen = $('story-screen');
 const hud = $('hud');
 const touchControls = $('touch-controls');
 const rotateMessage = $('rotate-message');
@@ -56,8 +58,16 @@ const storage = {
 let soundEnabled = storage.get('nico-sound', 'true') !== 'false';
 let bestScore = Number(storage.get('nico-best', '0')) || 0;
 let activeScene: SalonScene | undefined;
-const autoStart = location.hash === '#replay';
-if (autoStart) history.replaceState(null, '', `${location.pathname}${location.search}`);
+const levelMatch = location.hash.match(/^#level-(\d+)$/);
+let currentLevelIndex = levelMatch ? Math.min(Number(levelMatch[1]), LEVELS.length - 1) : 0;
+const autoStart = location.hash === '#replay' || !!levelMatch;
+if (location.hash === '#replay') {
+  try { sessionStorage.removeItem('nico-campaign'); } catch { /* Storage is optional. */ }
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
+}
+selectLevel(currentLevelIndex);
+let campaign = { sparks: 0, score: 0 };
+try { campaign = JSON.parse(sessionStorage.getItem('nico-campaign') || '{"sparks":0,"score":0}'); } catch { /* Use defaults. */ }
 let started = autoStart;
 let menuPaused = false;
 let orientationPaused = false;
@@ -186,7 +196,14 @@ function checkOrientation() {
 
 function reloadRun() {
   clearHeldInputs();
+  try { sessionStorage.removeItem('nico-campaign'); } catch { /* Storage is optional. */ }
   history.replaceState(null, '', `${location.pathname}${location.search}#replay`);
+  location.reload();
+}
+
+function loadNextLevel() {
+  currentLevelIndex = Math.min(currentLevelIndex + 1, LEVELS.length - 1);
+  history.replaceState(null, '', `${location.pathname}${location.search}#level-${currentLevelIndex}`);
   location.reload();
 }
 
@@ -258,11 +275,13 @@ class SalonScene extends Phaser.Scene {
   private sparks!: Phaser.Physics.Arcade.Group;
   private enemies!: Phaser.Physics.Arcade.Group;
   private projectiles!: Phaser.Physics.Arcade.Group;
+  private bossProjectiles!: Phaser.Physics.Arcade.Group;
+  private boss?: Phaser.Physics.Arcade.Sprite;
   private movingPlatform!: Phaser.GameObjects.Rectangle;
   private movingBody!: Phaser.Physics.Arcade.StaticBody;
   private iceBlocks: Phaser.GameObjects.Rectangle[] = [];
   private giftPlatforms: Phaser.GameObjects.Rectangle[] = [];
-  private goal!: Phaser.Physics.Arcade.Image;
+  private goal?: Phaser.Physics.Arcade.Image;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private collected = new Set<string>();
@@ -273,6 +292,11 @@ class SalonScene extends Phaser.Scene {
   private giftsBroken = 0;
   private enemiesDefeated = 0;
   private finished = false;
+  private campaignSaved = false;
+  private bossHealth = LEVEL.boss?.hits ?? 0;
+  private bossNextShot = 0;
+  private bossNextJump = 0;
+  private bossInvulnerableUntil = 0;
   private facing = 1;
   private jumpPressedAt = -9999;
   private leftGroundAt = -9999;
@@ -358,6 +382,11 @@ class SalonScene extends Phaser.Scene {
       g.lineStyle(2, 0xffffff, 0.8).strokeCircle(17, 16, 12);
     });
     make('magic', 28, 28, (g) => g.fillStyle(0xb5f5ff).fillPoints([{x:14,y:0},{x:18,y:10},{x:28,y:14},{x:18,y:18},{x:14,y:28},{x:10,y:18},{x:0,y:14},{x:10,y:10}], true));
+    make('enemy-magic', 32, 32, (g) => {
+      g.fillStyle(0xc16cff, 0.35).fillCircle(16, 16, 16);
+      g.fillStyle(0x8b35c9).fillPoints([{x:16,y:0},{x:21,y:10},{x:32,y:16},{x:21,y:22},{x:16,y:32},{x:11,y:22},{x:0,y:16},{x:11,y:10}], true);
+      g.fillStyle(0xffd2ff).fillCircle(16, 16, 5);
+    });
     make('snowman', 60, 74, (g) => {
       g.fillStyle(0xeefcff).fillCircle(30, 48, 24).fillCircle(30, 20, 18);
       g.fillStyle(0x253844).fillCircle(24, 17, 3).fillCircle(36, 17, 3);
@@ -370,6 +399,21 @@ class SalonScene extends Phaser.Scene {
       g.fillStyle(0x42293b).fillCircle(22, 34, 2).fillCircle(36, 34, 2);
       g.lineStyle(2, 0x702d35).lineBetween(23, 42, 35, 42);
     });
+    make('grouch', 104, 132, (g) => {
+      g.lineStyle(12, 0x55933f).lineBetween(29, 94, 18, 122).lineBetween(72, 94, 88, 122);
+      g.fillStyle(0x29302c).fillEllipse(14, 124, 30, 12).fillEllipse(91, 124, 30, 12);
+      g.fillStyle(0xb92e43).fillRoundedRect(20, 63, 66, 48, 15);
+      g.fillStyle(0xf4eee0).fillRect(18, 62, 70, 13);
+      g.fillStyle(0x72b553).fillEllipse(52, 45, 67, 67);
+      g.fillStyle(0x4e8d38).fillEllipse(19, 47, 15, 25).fillEllipse(85, 47, 15, 25);
+      g.fillStyle(0xffffff).fillEllipse(38, 40, 19, 14).fillEllipse(66, 40, 19, 14);
+      g.fillStyle(0xf6d34d).fillCircle(41, 42, 5).fillCircle(63, 42, 5);
+      g.fillStyle(0x28242d).fillCircle(42, 42, 2.5).fillCircle(62, 42, 2.5);
+      g.lineStyle(5, 0x31532d).lineBetween(27, 28, 45, 34).lineBetween(59, 34, 78, 28);
+      g.lineStyle(4, 0x3d5635).beginPath().arc(52, 57, 22, 3.4, 6).strokePath();
+      g.fillStyle(0xd73348).fillTriangle(15, 28, 81, 2, 91, 31);
+      g.fillStyle(0xf4eee0).fillCircle(84, 7, 8).fillRect(14, 24, 76, 11);
+    });
     make('goal', 100, 100, (g) => {
       g.fillStyle(0xffdf62).fillPoints([{x:50,y:0},{x:61,y:35},{x:99,y:36},{x:68,y:58},{x:80,y:96},{x:50,y:73},{x:20,y:96},{x:32,y:58},{x:1,y:36},{x:39,y:35}], true);
       g.lineStyle(5, 0xffffff, 0.8).strokeCircle(50, 48, 34);
@@ -377,6 +421,7 @@ class SalonScene extends Phaser.Scene {
   }
 
   private drawWorld() {
+    if (LEVEL.theme !== 'salon') { this.drawAlternateWorld(); return; }
     this.add.rectangle(LEVEL.width / 2, 360, LEVEL.width, 720, 0x4c3345).setDepth(-30);
     this.add.rectangle(LEVEL.width / 2, 670, LEVEL.width, 160, 0x754852).setDepth(-29);
     this.add.rectangle(LEVEL.width / 2, 590, LEVEL.width, 18, 0xe1b778).setDepth(-27);
@@ -404,6 +449,57 @@ class SalonScene extends Phaser.Scene {
     }
     for (let x = 380; x < 3200; x += 540) this.drawGift(x, 690, 130 + x % 90, 100 + x % 60);
     for (let x = 3500; x < 6200; x += 420) this.drawBookStack(x, 700, x % 3);
+  }
+
+  private drawAlternateWorld() {
+    const palettes = {
+      kitchen: { wall: 0xf0cfad, lower: 0x75a4a0, trim: 0x7e3946 },
+      workshop: { wall: 0x315662, lower: 0x7b3d50, trim: 0xe0b761 },
+      rooftop: { wall: 0x102d46, lower: 0x1b4055, trim: 0xe8f3ef },
+    } as const;
+    const palette = palettes[LEVEL.theme as keyof typeof palettes];
+    this.add.rectangle(LEVEL.width / 2, 350, LEVEL.width, 700, palette.wall).setDepth(-30);
+    this.add.rectangle(LEVEL.width / 2, 665, LEVEL.width, 170, palette.lower).setDepth(-28);
+    this.add.rectangle(LEVEL.width / 2, 580, LEVEL.width, 20, palette.trim).setDepth(-26);
+    if (LEVEL.theme === 'kitchen') {
+      for (let x = 0; x < LEVEL.width; x += 160) for (let y = 80; y < 560; y += 120) this.add.rectangle(x + 78, y, 150, 110, 0xffead1, 0.48).setStrokeStyle(3, 0xb97769, 0.35).setDepth(-27);
+      for (let x = 650; x < LEVEL.width; x += 1750) {
+        this.add.rectangle(x, 430, 620, 330, 0x984f45).setStrokeStyle(12, 0x5e3433).setDepth(-20);
+        this.add.rectangle(x, 430, 330, 230, 0x222936).setStrokeStyle(9, 0xd49e69).setDepth(-19);
+        this.add.circle(x - 190, 285, 58, 0x8ec0ba).setStrokeStyle(8, 0xf2d9a5).setDepth(-18);
+      }
+      for (let x = 1200; x < LEVEL.width; x += 1200) {
+        this.add.ellipse(x, 610, 420, 100, 0xd7e9df, 0.75).setDepth(-16);
+        this.add.rectangle(x, 555, 230, 85, 0xbe724b).setStrokeStyle(6, 0xffdf93).setDepth(-15);
+      }
+    } else if (LEVEL.theme === 'workshop') {
+      for (let x = 240; x < LEVEL.width; x += 560) {
+        this.add.circle(x, 230 + (x % 3) * 60, 105, 0xd2a64f, 0.35).setStrokeStyle(18, 0x523946).setDepth(-22);
+        this.add.circle(x, 230 + (x % 3) * 60, 35, 0x315662).setDepth(-21);
+        for (let a = 0; a < 8; a += 1) this.add.rectangle(x + Math.cos(a * Math.PI / 4) * 120, 230 + (x % 3) * 60 + Math.sin(a * Math.PI / 4) * 120, 38, 70, 0xd2a64f, 0.45).setAngle(a * 45).setDepth(-23);
+      }
+      this.add.rectangle(1800, 600, 1400, 170, 0x8f5a3d).setStrokeStyle(12, 0x3f3032).setDepth(-18);
+      for (let x = 3300; x < 7600; x += 900) {
+        this.add.rectangle(x, 575, 620, 190, x % 1800 ? 0x3d8c83 : 0xb44855).setStrokeStyle(10, 0xf0c766).setDepth(-17);
+        this.add.circle(x - 190, 680, 62, 0x292b36).setStrokeStyle(10, 0xd8b15d).setDepth(-16);
+        this.add.circle(x + 190, 680, 62, 0x292b36).setStrokeStyle(10, 0xd8b15d).setDepth(-16);
+      }
+    } else {
+      for (let x = 80; x < LEVEL.width; x += 210) this.add.circle(x, 90 + (x * 7) % 420, 3 + x % 6, 0xffffff, 0.75).setDepth(-24);
+      this.add.circle(3150, 150, 110, 0xffe9ad, 0.92).setDepth(-23);
+      for (let x = 0; x < LEVEL.width; x += 700) {
+        this.add.rectangle(x + 350, 570, 650, 260, 0x6c4352).setStrokeStyle(9, 0xc58c77).setDepth(-20);
+        this.add.triangle(x + 350, 390, 0, 210, 325, 0, 650, 210, 0x34536a).setDepth(-19);
+        this.add.rectangle(x + 530, 350, 95, 250, 0x744a43).setDepth(-18);
+        this.add.ellipse(x + 530, 215, 55, 110, 0xdce9e3, 0.45).setDepth(-17);
+      }
+      for (let x = 100; x < LEVEL.width; x += 260) this.add.circle(x, 705, 18 + x % 12, 0xffffff, 0.8).setDepth(-14);
+    }
+    for (let x = 100; x < LEVEL.width; x += 250) {
+      const glow = this.add.circle(x, 75 + Math.sin(x / 250) * 18, 6, x % 500 ? 0xffdc65 : 0xff6b82, 0.9).setDepth(-8);
+      this.twinkles.push(glow);
+      this.tweens.add({ targets: glow, alpha: 0.3, yoyo: true, repeat: -1, duration: 750 + x % 450 });
+    }
   }
 
   private drawWindow(x: number, y: number) {
@@ -529,6 +625,7 @@ class SalonScene extends Phaser.Scene {
       enemy.body!.setSize(data.type === 'cookie' ? 44 : 46, data.type === 'cookie' ? 55 : 68);
     });
     this.projectiles = this.physics.add.group({ allowGravity: false });
+    this.bossProjectiles = this.physics.add.group({ allowGravity: false });
     this.createIce(LEVEL.ice.x, LEVEL.ice.y, LEVEL.ice.width, LEVEL.ice.height, false);
     this.createIce(5945, 205, 80, 125, true);
     const switchBase = this.add.rectangle(LEVEL.switch.x, LEVEL.switch.y, 52, 75, 0x6f3760).setStrokeStyle(4, 0xf6d465);
@@ -537,10 +634,20 @@ class SalonScene extends Phaser.Scene {
     this.physics.add.overlap(this.projectiles, switchBase, (bullet) => {
       (bullet as Phaser.Physics.Arcade.Sprite).destroy(); this.activateSwitch();
     });
-    this.goal = this.physics.add.image(LEVEL.goal.x, LEVEL.goal.y, 'goal').setImmovable(true).setDepth(7);
-    (this.goal.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
-    this.tweens.add({ targets: this.goal, angle: 8, scale: 1.08, yoyo: true, repeat: -1, duration: 900 });
-    this.add.text(LEVEL.goal.x - 145, LEVEL.goal.y - 95, 'LA ESTRELLA', { fontFamily: 'Arial Black', fontSize: '28px', color: '#fff7c2', stroke: '#57203b', strokeThickness: 8 });
+    if (LEVEL.boss) {
+      this.bossHealth = LEVEL.boss.hits;
+      this.boss = this.physics.add.sprite(LEVEL.boss.x, LEVEL.boss.y, 'grouch').setDepth(9).setBounce(0.05).setCollideWorldBounds(true);
+      this.boss.body!.setSize(70, 112).setOffset(17, 18);
+      this.boss.setData({ dying: false, direction: -1 });
+      this.bossNextShot = this.time.now + 900;
+      this.bossNextJump = this.time.now + 1300;
+      this.add.text(LEVEL.boss.x - 150, 390, 'EL GRUÑÓN VERDE', { fontFamily: 'Arial Black', fontSize: '26px', color: '#c7ff8c', stroke: '#321f3d', strokeThickness: 8 }).setDepth(3);
+    } else {
+      this.goal = this.physics.add.image(LEVEL.goal.x, LEVEL.goal.y, 'goal').setImmovable(true).setDepth(7);
+      (this.goal.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      this.tweens.add({ targets: this.goal, angle: 8, scale: 1.08, yoyo: true, repeat: -1, duration: 900 });
+      this.add.text(LEVEL.goal.x - 145, LEVEL.goal.y - 95, 'LA ESTRELLA', { fontFamily: 'Arial Black', fontSize: '28px', color: '#fff7c2', stroke: '#57203b', strokeThickness: 8 });
+    }
   }
 
   private createIce(x: number, y: number, width: number, height: number, secret: boolean) {
@@ -584,7 +691,17 @@ class SalonScene extends Phaser.Scene {
       else if (target.getData('ice')) this.breakIce(target);
       (bullet as Phaser.Physics.Arcade.Sprite).destroy();
     });
-    this.physics.add.overlap(this.player, this.goal, () => this.finishLevel());
+    if (this.goal) this.physics.add.overlap(this.player, this.goal, () => this.finishLevel());
+    if (this.boss) {
+      this.physics.add.collider(this.boss, this.platforms);
+      this.physics.add.overlap(this.player, this.boss, () => this.hitPlayer(this.boss!));
+      this.physics.add.overlap(this.projectiles, this.boss, (bullet) => this.hitBoss(bullet as Phaser.Physics.Arcade.Sprite));
+      this.physics.add.overlap(this.player, this.bossProjectiles, (_player, bullet) => {
+        (bullet as Phaser.Physics.Arcade.Sprite).destroy();
+        this.hitPlayer(this.boss!);
+      });
+      this.physics.add.collider(this.bossProjectiles, this.platforms, (bullet) => (bullet as Phaser.Physics.Arcade.Sprite).destroy());
+    }
   }
 
   clearTransientInput() {
@@ -660,6 +777,27 @@ class SalonScene extends Phaser.Scene {
     this.tweens.add({ targets: enemy, alpha: 0.2, delay: 650, duration: 700, onComplete: () => enemy.destroy() });
     audio.play('hit');
     showToast('¡ENEMIGO DERROTADO!', 800);
+  }
+
+  private hitBoss(bullet?: Phaser.Physics.Arcade.Sprite, force = false) {
+    bullet?.destroy();
+    if (!this.boss?.active || this.boss.getData('dying') || (!force && this.time.now < this.bossInvulnerableUntil)) return;
+    this.bossInvulnerableUntil = this.time.now + 280;
+    this.bossHealth -= 1;
+    audio.play('hit');
+    this.boss.setTint(0xffe078).setVelocityX(this.player.x < this.boss.x ? 190 : -190).setVelocityY(-130);
+    this.tweens.add({ targets: this.boss, scaleX: 1.18, scaleY: 0.82, yoyo: true, duration: 120, onComplete: () => this.boss?.clearTint().setScale(1) });
+    if (this.bossHealth > 0) {
+      showToast(`¡IMPACTO! QUEDAN ${this.bossHealth} GOLPES`, 1000);
+      return;
+    }
+    this.boss.setData('dying', true).setCollideWorldBounds(false).setVelocity(this.boss.x < this.player.x ? -170 : 170, -520).setAngularVelocity(420);
+    const body = this.boss.body as Phaser.Physics.Arcade.Body;
+    body.checkCollision.none = true;
+    body.setAllowGravity(true);
+    this.bossProjectiles.clear(true, true);
+    showToast('¡EL GRUÑÓN HA SIDO DERROTADO!', 1600);
+    window.setTimeout(() => this.finishLevel(), 1150);
   }
 
   private damageGift(target: Phaser.GameObjects.Rectangle) {
@@ -738,21 +876,35 @@ class SalonScene extends Phaser.Scene {
     this.finished = true;
     this.player.setVelocity(0, 0).body!.enable = false;
     this.setPlayerPose('nico-celebrate');
-    this.goal.setTint(0xffffff);
+    this.goal?.setTint(0xffffff);
     this.cameras.main.flash(700, 255, 226, 109);
     this.twinkles.forEach((light) => light.setFillStyle(0xffe36e, 1));
     audio.play('star');
     this.tweens.add({ targets: this.player, y: this.player.y - 55, angle: 360, scale: 1.2, duration: 900, ease: 'Back.out' });
     const score = this.collected.size * 100;
-    bestScore = Math.max(bestScore, score);
+    if (!this.campaignSaved) {
+      campaign = { sparks: campaign.sparks + this.collected.size, score: campaign.score + score };
+      try { sessionStorage.setItem('nico-campaign', JSON.stringify(campaign)); } catch { /* Storage is optional. */ }
+      this.campaignSaved = true;
+    }
+    bestScore = Math.max(bestScore, campaign.score);
     storage.set('nico-best', String(bestScore));
     window.setTimeout(() => {
-      $('result-sparks').textContent = `${this.collected.size}/${LEVEL.sparks.length}`;
-      $('result-score').textContent = score.toLocaleString('es-ES');
-      $('result-best').textContent = bestScore.toLocaleString('es-ES');
-      resultScreen.classList.remove('hidden');
       touchControls.classList.add('hidden');
       hud.classList.add('hidden');
+      if (LEVEL.next) {
+        $('story-character-name').textContent = LEVEL.next.character;
+        $('story-title').textContent = LEVEL.next.title;
+        $('story-message').textContent = LEVEL.next.message;
+        storyScreen.classList.remove('hidden');
+      } else {
+        const campaignTotal = LEVELS.reduce((total, level) => total + level.sparks.length, 0);
+        $('result-title').innerHTML = '¡HAS RECUPERADO<br />LA MAGIA!';
+        $('result-sparks').textContent = `${campaign.sparks}/${campaignTotal}`;
+        $('result-score').textContent = campaign.score.toLocaleString('es-ES');
+        $('result-best').textContent = bestScore.toLocaleString('es-ES');
+        resultScreen.classList.remove('hidden');
+      }
     }, 900);
   }
 
@@ -788,6 +940,32 @@ class SalonScene extends Phaser.Scene {
           }
         }
       }
+    });
+  }
+
+  private updateBoss(time: number) {
+    const boss = this.boss;
+    const config = LEVEL.boss;
+    if (!boss?.active || !config || boss.getData('dying')) return;
+    let direction = Number(boss.getData('direction')) || -1;
+    if (boss.x <= config.minX || boss.body?.blocked.left) direction = 1;
+    if (boss.x >= config.maxX || boss.body?.blocked.right) direction = -1;
+    boss.setData('direction', direction).setVelocityX(direction * 115).setFlipX(direction > 0);
+    boss.angle = Math.sin(time / 150) * 3;
+    if (time >= this.bossNextJump && boss.body?.blocked.down) {
+      const towardPlayer = this.player.x < boss.x ? -1 : 1;
+      boss.setVelocity(towardPlayer * 230, -490);
+      this.bossNextJump = time + 1650 + Phaser.Math.Between(0, 650);
+    }
+    if (time >= this.bossNextShot) {
+      const shot = this.bossProjectiles.create(boss.x + (this.player.x < boss.x ? -45 : 45), boss.y - 18, 'enemy-magic') as Phaser.Physics.Arcade.Sprite;
+      const aim = new Phaser.Math.Vector2(this.player.x - boss.x, this.player.y - boss.y).normalize().scale(355);
+      shot.setVelocity(aim.x, aim.y).setAngularVelocity(520).setDepth(10).setData('born', time);
+      this.bossNextShot = time + 1050 + Phaser.Math.Between(0, 450);
+    }
+    this.bossProjectiles.getChildren().forEach((child) => {
+      const shot = child as Phaser.Physics.Arcade.Sprite;
+      if (time - Number(shot.getData('born')) > 2600) shot.destroy();
     });
   }
 
@@ -865,6 +1043,7 @@ class SalonScene extends Phaser.Scene {
     });
     if (this.player.y > LEVEL.height + 100) this.respawn();
     this.updateEnemies(time);
+    this.updateBoss(time);
     this.updateTutorials();
     this.updateZoneLabel();
     this.updateHud();
@@ -877,7 +1056,7 @@ class SalonScene extends Phaser.Scene {
   }
 
   private snapshot(): GameSnapshot {
-    return { sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, pose: this.currentPose, finished: this.finished };
+    return { levelId: LEVEL.id, sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, bossHealth: LEVEL.boss ? this.bossHealth : null, bossProjectiles: this.bossProjectiles.countActive(true), pose: this.currentPose, finished: this.finished };
   }
 
   private installDebugApi() {
@@ -892,6 +1071,7 @@ class SalonScene extends Phaser.Scene {
       hitGift: (index) => { const gift = this.giftPlatforms[index]; if (gift?.active) this.damageGift(gift); },
       defeatEnemy: (id) => { const enemy = this.enemies.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; if (enemy) this.defeatEnemy(undefined, enemy); },
       enemyX: (id) => { const enemy = this.enemies.getChildren().find((child) => child.getData('id') === id) as Phaser.Physics.Arcade.Sprite | undefined; return enemy?.x ?? null; },
+      hitBoss: () => this.hitBoss(undefined, true),
       respawn: () => this.respawn(),
       finish: () => this.finishLevel(),
     };
@@ -911,6 +1091,8 @@ const game = new Phaser.Game({
 
 $('play-button').addEventListener('click', () => {
   audio.unlock();
+  campaign = { sparks: 0, score: 0 };
+  try { sessionStorage.removeItem('nico-campaign'); } catch { /* Storage is optional. */ }
   resultScreen.classList.add('hidden');
   playIntro();
 });
@@ -928,6 +1110,10 @@ $('sound-button').addEventListener('click', () => {
 });
 $('replay-button').addEventListener('click', () => {
   reloadRun();
+});
+$('next-level-button').addEventListener('click', () => {
+  storyScreen.classList.add('hidden');
+  loadNextLevel();
 });
 
 updateSoundLabel();

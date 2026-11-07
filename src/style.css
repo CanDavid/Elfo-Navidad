@@ -66,6 +66,11 @@ h2 { font-size: clamp(34px, 5vw, 58px); color: #f9e17f; }
 #result-screen dl { margin: 12px auto; max-width: 420px; }
 #result-screen dl div { display: flex; justify-content: space-between; gap: 20px; padding: 8px 4px; border-bottom: 1px dashed #ffe7a966; }
 #result-screen dt { color: #f5d56b; text-align: left; } #result-screen dd { margin: 0; font-size: 1.16em; }
+.story-character { position: relative; width: 92px; height: 92px; margin: 0 auto 12px; border: 5px solid #f3d16b; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff5c0, #d44a62 65%, #6f2542); box-shadow: 0 0 28px #ffdb6d88; }
+.story-character::before, .story-character::after { content: ""; position: absolute; top: 35px; width: 13px; height: 13px; border-radius: 50%; background: #302437; }
+.story-character::before { left: 24px; }.story-character::after { right: 24px; }
+.story-character span { position: absolute; right: -8px; top: -15px; color: #ffe270; font-size: 34px; transform: rotate(14deg); }
+#story-message { font-size: clamp(14px, 2vw, 20px); line-height: 1.55; }
 
 #rotate-message { position: absolute; z-index: 100; inset: 0; display: grid; place-content: center; gap: 18px; text-align: center; background: #153a3a; color: #fff1b7; font-size: clamp(20px, 7vw, 34px); letter-spacing: .04em; }
 #rotate-message div { font-size: 72px; color: #e04a5c; animation: turn 1.6s ease-in-out infinite; }

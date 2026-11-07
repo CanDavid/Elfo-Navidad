@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-type Snapshot = { sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; pose: string; finished: boolean };
+type Snapshot = { levelId: string; sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; bossHealth: number | null; bossProjectiles: number; pose: string; finished: boolean };
 
 const snapshot = (page: import('@playwright/test').Page) => page.evaluate(() => window.__NICO_DEBUG__!.snapshot()) as Promise<Snapshot>;
 
@@ -94,28 +94,26 @@ test('Nico cambia de pose al correr, saltar, volar y lanzar magia', async ({ pag
   await page.waitForTimeout(100);
   expect((await snapshot(page)).pose).toBe('nico-fly');
   await page.keyboard.up('Space');
+  await page.waitForTimeout(350);
   await page.evaluate(() => window.__NICO_DEBUG__!.castMagic());
-  expect((await snapshot(page)).pose).toBe('nico-magic');
+  await page.waitForFunction(() => window.__NICO_DEBUG__?.snapshot().pose === 'nico-magic');
 });
 
-test('termina la partida, reinicia elementos y conserva el récord', async ({ page }) => {
+test('termina el primer nivel, avanza a la cocina y conserva el récord', async ({ page }) => {
   await page.evaluate(() => {
     window.__NICO_DEBUG__!.collect('g0');
     window.__NICO_DEBUG__!.collect('secret0');
     window.__NICO_DEBUG__!.finish();
   });
-  await expect(page.getByRole('heading', { name: /HAS ENCENDIDO/ })).toBeVisible();
+  await expect(page.locator('#story-screen')).toBeVisible();
+  await expect(page.locator('#story-character-name')).toContainText('LUMI');
   expect((await snapshot(page)).finished).toBe(true);
-  await page.getByRole('button', { name: 'VOLVER A JUGAR' }).click();
+  await page.getByRole('button', { name: 'SIGUIENTE NIVEL' }).click();
   await page.waitForFunction(() => window.__NICO_DEBUG__?.snapshot().finished === false);
   const fresh = await snapshot(page);
   expect(fresh.sparks).toBe(0);
   expect(fresh.best).toBe(200);
-
-  await page.reload();
-  await page.getByRole('button', { name: 'JUGAR' }).click();
-  await page.waitForFunction(() => !!window.__NICO_DEBUG__);
-  expect((await snapshot(page)).best).toBe(200);
+  expect(fresh.levelId).toBe('cocina-dulces');
 });
 
 test('pausa en vertical y conserva el estado al volver a horizontal', async ({ page }) => {

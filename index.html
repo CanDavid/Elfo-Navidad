@@ -49,13 +49,20 @@
       </section>
       <section id="result-screen" class="screen-card hidden">
         <p class="eyebrow">MISIÓN CUMPLIDA</p>
-        <h2>¡HAS ENCENDIDO<br />LA ESTRELLA!</h2>
+        <h2 id="result-title">¡HAS ENCENDIDO<br />LA ESTRELLA!</h2>
         <dl>
           <div><dt>CHISPAS RECOGIDAS</dt><dd id="result-sparks">0/0</dd></div>
           <div><dt>PUNTOS</dt><dd id="result-score">0</dd></div>
           <div><dt>RÉCORD</dt><dd id="result-best">0</dd></div>
         </dl>
         <button id="replay-button" class="primary-button">VOLVER A JUGAR</button>
+      </section>
+      <section id="story-screen" class="screen-card hidden">
+        <div class="story-character" aria-hidden="true"><span>★</span></div>
+        <p id="story-character-name" class="eyebrow">LUMI</p>
+        <h2 id="story-title">EL VIAJE CONTINÚA</h2>
+        <p id="story-message"></p>
+        <button id="next-level-button" class="primary-button">SIGUIENTE NIVEL</button>
       </section>
       <div id="rotate-message" class="hidden"><div>↻</div><strong>GIRA EL DISPOSITIVO<br />PARA JUGAR</strong></div>
       <div id="toast" class="hidden"></div>
