@@ -104,14 +104,14 @@ const workshop: LevelData = {
 };
 
 const rooftop: LevelData = {
-  id:'azotea-final',name:'LA AZOTEA DEL GRUÑÓN',theme:'rooftop',width:3900,height:900,
+  id:'azotea-final',name:'LA AZOTEA DEL GRUÑÓN',theme:'rooftop',width:1550,height:900,
   spawn:{x:220,y:680},checkpoint:{x:220,y:680},goal:{x:-1000,y:-1000},switch:{x:-1000,y:-1000},ice:{x:-1200,y:-1000,width:1,height:1},
   movingPlatform:{fromX:-1000,toX:-1000,y:-1000,width:1},
-  zones:[{name:'DUELO FINAL',start:0,end:3900,color:0x173a38}],
-  platforms:[{x:0,y:750,width:3900,height:150,kind:'floor'},{x:700,y:590,width:330,height:38,kind:'branch'},{x:1450,y:500,width:360,height:38,kind:'branch'},{x:2200,y:600,width:360,height:38,kind:'branch'},{x:3000,y:520,width:350,height:38,kind:'branch'}],
-  sparks:[...[450,850,1250,1650,2050,2450,2850,3250].map((x,i)=>({id:`b${i}`,x,y:670-(i%3)*70}))],
+  zones:[{name:'DUELO FINAL',start:0,end:1550,color:0x173a38}],
+  platforms:[{x:0,y:750,width:1550,height:150,kind:'floor'},{x:470,y:570,width:260,height:38,kind:'branch'},{x:930,y:510,width:280,height:38,kind:'branch'}],
+  sparks:[...[350,570,790,1010,1230,1430].map((x,i)=>({id:`b${i}`,x,y:675-(i%3)*65}))],
   enemies:[], tutorials:[{x:500,text:'ESQUIVA SU MAGIA Y GOLPÉALO CINCO VECES'}],
-  boss:{x:3100,y:640,minX:2100,maxX:3550,hits:5},
+  boss:{x:1030,y:650,minX:720,maxX:1340,hits:5},
 };
 
 export const LEVELS: LevelData[] = [salon,kitchen,workshop,rooftop];

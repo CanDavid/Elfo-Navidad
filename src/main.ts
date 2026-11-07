@@ -3,7 +3,7 @@ import { LEVEL, LEVELS, selectLevel, type EnemyData, type PlatformData } from '.
 import './style.css';
 
 type HeldInput = { left: boolean; right: boolean; jump: boolean; magic: boolean };
-type GameSnapshot = { levelId: string; sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; bossHealth: number | null; bossProjectiles: number; pose: string; finished: boolean };
+type GameSnapshot = { levelId: string; sparks: number; total: number; score: number; best: number; checkpoint: boolean; switchOn: boolean; iceBroken: boolean; secretFound: boolean; giftsBroken: number; enemiesDefeated: number; bossHealth: number | null; bossProjectiles: number; bossX: number | null; bossY: number | null; bossVisible: boolean; pose: string; finished: boolean };
 
 declare global {
   interface Window {
@@ -277,6 +277,7 @@ class SalonScene extends Phaser.Scene {
   private projectiles!: Phaser.Physics.Arcade.Group;
   private bossProjectiles!: Phaser.Physics.Arcade.Group;
   private boss?: Phaser.Physics.Arcade.Sprite;
+  private bossHealthLabel?: Phaser.GameObjects.Text;
   private movingPlatform!: Phaser.GameObjects.Rectangle;
   private movingBody!: Phaser.Physics.Arcade.StaticBody;
   private iceBlocks: Phaser.GameObjects.Rectangle[] = [];
@@ -641,7 +642,9 @@ class SalonScene extends Phaser.Scene {
       this.boss.setData({ dying: false, direction: -1 });
       this.bossNextShot = this.time.now + 900;
       this.bossNextJump = this.time.now + 1300;
-      this.add.text(LEVEL.boss.x - 150, 390, 'EL GRUÑÓN VERDE', { fontFamily: 'Arial Black', fontSize: '26px', color: '#c7ff8c', stroke: '#321f3d', strokeThickness: 8 }).setDepth(3);
+      this.bossHealthLabel = this.add.text(640, 108, 'GRUÑÓN  ♥ ♥ ♥ ♥ ♥', { fontFamily: 'Arial Black', fontSize: '25px', color: '#c7ff8c', stroke: '#321f3d', strokeThickness: 7 })
+        .setOrigin(0.5).setScrollFactor(0).setDepth(55);
+      this.add.ellipse(LEVEL.boss.x, 727, 150, 24, 0x0b1820, 0.42).setDepth(2);
     } else {
       this.goal = this.physics.add.image(LEVEL.goal.x, LEVEL.goal.y, 'goal').setImmovable(true).setDepth(7);
       (this.goal.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
@@ -784,6 +787,7 @@ class SalonScene extends Phaser.Scene {
     if (!this.boss?.active || this.boss.getData('dying') || (!force && this.time.now < this.bossInvulnerableUntil)) return;
     this.bossInvulnerableUntil = this.time.now + 280;
     this.bossHealth -= 1;
+    this.bossHealthLabel?.setText(`GRUÑÓN  ${'♥ '.repeat(this.bossHealth).trim() || 'DERROTADO'}`);
     audio.play('hit');
     this.boss.setTint(0xffe078).setVelocityX(this.player.x < this.boss.x ? 190 : -190).setVelocityY(-130);
     this.tweens.add({ targets: this.boss, scaleX: 1.18, scaleY: 0.82, yoyo: true, duration: 120, onComplete: () => this.boss?.clearTint().setScale(1) });
@@ -947,6 +951,10 @@ class SalonScene extends Phaser.Scene {
     const boss = this.boss;
     const config = LEVEL.boss;
     if (!boss?.active || !config || boss.getData('dying')) return;
+    if (boss.y > 790 || boss.x < config.minX - 180 || boss.x > config.maxX + 180) {
+      boss.setPosition(config.x, config.y).setVelocity(0, 0).setAngularVelocity(0).setAngle(0);
+    }
+    boss.setVisible(true).setAlpha(1);
     let direction = Number(boss.getData('direction')) || -1;
     if (boss.x <= config.minX || boss.body?.blocked.left) direction = 1;
     if (boss.x >= config.maxX || boss.body?.blocked.right) direction = -1;
@@ -981,7 +989,7 @@ class SalonScene extends Phaser.Scene {
       showToast(tutorial.text, 2500);
       this.tutorialIndex += 1;
     }
-    if (!this.checkpointReached && this.player.x >= LEVEL.checkpoint.x) {
+    if (!LEVEL.boss && !this.checkpointReached && this.player.x >= LEVEL.checkpoint.x) {
       this.checkpointReached = true;
       this.respawnPoint = { ...LEVEL.checkpoint };
       showToast('PUNTO DE CONTROL', 1800);
@@ -1056,7 +1064,7 @@ class SalonScene extends Phaser.Scene {
   }
 
   private snapshot(): GameSnapshot {
-    return { levelId: LEVEL.id, sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, bossHealth: LEVEL.boss ? this.bossHealth : null, bossProjectiles: this.bossProjectiles.countActive(true), pose: this.currentPose, finished: this.finished };
+    return { levelId: LEVEL.id, sparks: this.collected.size, total: LEVEL.sparks.length, score: this.collected.size * 100, best: bestScore, checkpoint: this.checkpointReached, switchOn: this.switchOn, iceBroken: this.iceBroken, secretFound: this.secretFound, giftsBroken: this.giftsBroken, enemiesDefeated: this.enemiesDefeated, bossHealth: LEVEL.boss ? this.bossHealth : null, bossProjectiles: this.bossProjectiles.countActive(true), bossX: this.boss?.x ?? null, bossY: this.boss?.y ?? null, bossVisible: this.boss?.visible ?? false, pose: this.currentPose, finished: this.finished };
   }
 
   private installDebugApi() {

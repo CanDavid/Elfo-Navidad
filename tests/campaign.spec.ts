@@ -20,6 +20,9 @@ test('recorre los tres niveles, presenta a cada guía y abre el duelo final', as
 
   const bossStart = await page.evaluate(() => window.__NICO_DEBUG__!.snapshot());
   expect(bossStart.bossHealth).toBe(5);
+  expect(bossStart.bossVisible).toBe(true);
+  expect(bossStart.bossX).toBeGreaterThan(700);
+  expect(bossStart.bossX).toBeLessThan(1350);
   await page.waitForTimeout(1700);
   expect((await page.evaluate(() => window.__NICO_DEBUG__!.snapshot().bossProjectiles)).valueOf()).toBeGreaterThan(0);
 });
